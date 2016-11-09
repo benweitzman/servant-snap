@@ -599,13 +599,19 @@ alternativeSpec = do
 ------------------------------------------------------------------------------
 type AuthenticatedApi =
        "protected" :> Authenticated Person :> Get '[JSON] Person
+  :<|> "optionallyProtected" :> Maybe (Authenticated Person) :> Get '[JSON] (Either Person Animal)
   :<|> "unprotected" :> Get '[JSON] Person
 
 authenticatedApi :: Proxy AuthenticatedApi
 authenticatedApi = Proxy
 
 authenticatedServer :: Server AuthenticatedApi AppHandler
-authenticatedServer = return :<|> return alice
+authenticatedServer =
+       return
+  :<|> (\mPerson -> case mPerson of
+          Just person -> return (Left person)
+          Nothing -> return $ Right jerry)
+  :<|> return alice
 
 authenticatedSpec :: Spec
 authenticatedSpec = do
@@ -632,6 +638,30 @@ authenticatedSpec = do
                     [("Authorization", "Bearer " <> BL.toStrict jwt)]
                     ""
       response `shouldDecodeTo` alice
+    it "works with optional authentication (positive)" $ do
+      Right jwt <- makeJWT alice settings Nothing
+      response <- runReqOnApiWithContext
+                    ctx
+                    authenticatedApi
+                    authenticatedServer
+                    SC.GET
+                    "/optionallyProtected"
+                    ""
+                    [("Authorization", "Bearer " <> BL.toStrict jwt)]
+                    ""
+      response `shouldDecodeTo` (Left alice :: Either Person Animal)
+    it "works with optional authentication (negative)" $ do
+      response <- runReqOnApiWithContext
+                    ctx
+                    authenticatedApi
+                    authenticatedServer
+                    SC.GET
+                    "/optionallyProtected"
+                    ""
+                    []
+                    ""
+      response `shouldDecodeTo` (Right jerry :: Either Person Animal)
+
 
 
 -- }}}

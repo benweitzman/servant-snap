@@ -482,6 +482,22 @@ instance (HasServer sublayout ctx m, FromJWT a, HasContext ctx (AuthCheck m a)) 
             Authenticated val -> return val
             _ -> delayedFail err403
 
+instance (HasServer sublayout ctx m, FromJWT a, HasContext ctx (AuthCheck m a)) =>
+         HasServer (Maybe (Authenticated a) :> sublayout) ctx m where
+    type ServerT (Maybe (Authenticated a) :> sublayout) m = Maybe a -> ServerT sublayout m
+
+    route Proxy ctx subserver =
+        route (Proxy :: Proxy sublayout) ctx (addAuthCheck subserver authCheck')
+      where
+        -- authCheck' :: DelayedM m a
+        authCheck' = do
+          req <- lift getRequest
+          res <- lift $ runAuthCheck (getFromContext ctx) req
+          case res of
+            Authenticated val -> return $ Just val
+            _ -> return Nothing
+
+
 -- | Make sure the incoming request starts with @"/path"@, strip it and
 -- pass the rest of the request path to @sublayout@.
 instance (KnownSymbol path, HasServer sublayout ctx m) => HasServer (path :> sublayout) ctx m where
