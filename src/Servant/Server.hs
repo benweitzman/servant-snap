@@ -86,15 +86,17 @@ import           Snap.Core                         hiding (route)
 --
 
 serveApplication
-  :: forall layout m.(HasServer layout, MonadSnap m)
+  :: forall ctx layout m.(HasServer layout ctx, MonadSnap m, AllApply ctx m)
   => Proxy layout
-  -> Server layout m
+  -> Proxy ctx
+  -> Server ctx layout m
   -> Application m
-serveApplication p server = toApplication (runRouter (route p (emptyDelayed (Proxy :: Proxy (m :: * -> *)) ((Route server)))))
+serveApplication p p' server = toApplication (runRouter (route p p' (emptyDelayed (Proxy :: Proxy (m :: * -> *)) ((Route server)))))
 
 serveSnap
-  :: forall layout m.(HasServer layout, MonadSnap m)
+  :: forall ctx layout m.(HasServer layout ctx, MonadSnap m, AllApply ctx m)
   => Proxy layout
-  -> Server layout m
+  -> Proxy ctx
+  -> Server ctx layout m
   -> m ()
-serveSnap p server = applicationToSnap $ serveApplication p server
+serveSnap p p' server = applicationToSnap $ serveApplication p p' server

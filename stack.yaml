@@ -40,8 +40,11 @@ packages:
     commit: 98047f0f1b95ed3b54d8bf117258bd001f6f5f8b
 - location:
     git: https://github.com/snapframework/snap-loader-static.git
-    commit: a31b7a418894d944cf9ff52262e213f9d5cea437  
-           
+    commit: a31b7a418894d944cf9ff52262e213f9d5cea437
+- location:
+    git: https://github.com/martyall/token-authentication
+    commit: da14b4d43f56c09e8d04ce1688c81125241f76e0
+
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 
 extra-deps:
@@ -49,6 +52,8 @@ extra-deps:
    - base-orphans-0.5.4
    - text-1.2.2.1
    - map-syntax-0.2.0.1
+   - uuid-aeson-0.1.0.0
+   - jose-0.5.0.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}
@@ -68,8 +73,8 @@ extra-package-dbs: []
 # arch: x86_64
 
 # Extra directories used by stack for building
-# extra-include-dirs: [/path/to/dir]
-# extra-lib-dirs: [/path/to/dir]
+extra-include-dirs: [/usr/local/opt/openssl/include]
+extra-lib-dirs: [/usr/local/opt/openssl/lib]
 
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor

@@ -12,6 +12,10 @@
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE DataKinds #-}
+
 module Servant.Server.Internal.RoutingApplication where
 
 import           Control.Applicative                 (Applicative(..), Alternative(..), (<$>))
@@ -31,6 +35,7 @@ import           Servant.Server.Internal.ServantErr
 import           Snap.Core
 import           Snap.Internal.Http.Types            (setResponseBody)
 
+import GHC.Exts
 
 type RoutingApplication m =
      Request -- ^ the request, the field 'pathInfo' may be modified by url routing
@@ -64,8 +69,8 @@ responseLBS (Status code msg) hs body =
        return out)
     $ emptyResponse
 
-runAction :: MonadSnap m
-          => Delayed m env (m a)
+runAction :: (MonadSnap m, AllApply ctx m)
+          => Delayed ctx m env (m a)
           -> env
           -> Request
           -> (RouteResult Response -> m r)
@@ -81,15 +86,20 @@ runAction action env req respond k = do
       return $ k e
 
 
-data Delayed m env c where
+type family AllApply (ctxs :: [k -> Constraint]) (a :: k) :: Constraint where
+    AllApply '[] k = ()
+    AllApply (c ': cs) k = (c k, AllApply cs k)
+
+
+data Delayed ctx m env c where
   Delayed :: { capturesD :: env -> DelayedM m captures
              , methodD   :: DelayedM m ()
-             , authD     :: DelayedM m auth
+             , authD     :: AllApply ctx m => DelayedM m auth
              , bodyD     :: DelayedM m body
              , serverD   :: captures -> auth -> body -> Request -> RouteResult c
-             } -> Delayed m env c
+             } -> Delayed ctx m env c
 
-instance Functor (Delayed m env) where
+instance Functor (Delayed ctx m env) where
   fmap f Delayed{..} =
     Delayed
       { serverD = \ c a b req -> f <$> serverD c a b req
@@ -133,8 +143,14 @@ instance MonadTrans DelayedM where
     return $ Route a
 
 
+type family Const (a :: k1) (b :: k2) :: k1 where
+    Const a b = a
+
+type family EmptyConstraint :: Constraint where
+    EmptyConstraint = ()
+
 -- | A 'Delayed' without any stored checks.
-emptyDelayed :: Monad m => Proxy (m :: * -> *) -> RouteResult a -> Delayed m env a
+emptyDelayed :: (Monad m, AllApply ctx m) => Proxy (m :: * -> *) -> RouteResult a -> Delayed ctx m env a
 emptyDelayed (Proxy :: Proxy m) result =
   Delayed (const r) r r r (\ _ _ _ _ -> result)
   where
@@ -154,9 +170,9 @@ withRequest :: (Request -> DelayedM m a) -> DelayedM m a
 withRequest f = DelayedM (\ req -> runDelayedM (f req) req)
 
 -- | Add a capture to the end of the capture block.
-addCapture :: forall env a b captured m. Monad m => Delayed m env (a -> b)
+addCapture :: forall ctx env a b captured m. Monad m => Delayed ctx m env (a -> b)
            -> (captured -> DelayedM m a)
-           -> Delayed m (captured, env) b
+           -> Delayed ctx m (captured, env) b
 addCapture Delayed{..} new =
   Delayed
     { capturesD = \ (txt, env) -> (,) <$> capturesD env <*> new txt
@@ -166,9 +182,9 @@ addCapture Delayed{..} new =
 
 -- | Add a method check to the end of the method block.
 addMethodCheck :: Monad m
-               => Delayed m env a
+               => Delayed ctx m env a
                -> DelayedM m ()
-               -> Delayed m env a
+               -> Delayed ctx m env a
 addMethodCheck Delayed{..} new =
   Delayed
     { methodD = methodD <* new
@@ -176,10 +192,10 @@ addMethodCheck Delayed{..} new =
     } -- Note [Existential Record Update]
 
 -- | Add an auth check to the end of the auth block.
-addAuthCheck :: Monad m
-             => Delayed m env (a -> b)
+addAuthCheck :: (Monad m, AllApply ctx m)
+             => Delayed ctx m env (a -> b)
              -> DelayedM m a
-             -> Delayed m env b
+             -> Delayed ctx m env b
 addAuthCheck Delayed{..} new =
   Delayed
     { authD   = (,) <$> authD <*> new
@@ -189,9 +205,9 @@ addAuthCheck Delayed{..} new =
 
 -- | Add a body check to the end of the body block.
 addBodyCheck :: Monad m
-             => Delayed m env (a -> b)
+             => Delayed ctx m env (a -> b)
              -> DelayedM m a
-             -> Delayed m env b
+             -> Delayed ctx m env b
 addBodyCheck Delayed{..} new =
   Delayed
     { bodyD   = (,) <$> bodyD <*> new
@@ -211,9 +227,9 @@ addBodyCheck Delayed{..} new =
 -- body check further so that it can still be run in a situation
 -- where we'd otherwise report 406).
 addAcceptCheck :: Monad m
-               => Delayed m env a
+               => Delayed ctx m env a
                -> DelayedM m ()
-               -> Delayed m env a
+               -> Delayed ctx m env a
 addAcceptCheck Delayed{..} new =
   Delayed
     { bodyD = new *> bodyD
@@ -223,7 +239,7 @@ addAcceptCheck Delayed{..} new =
 -- | Many combinators extract information that is passed to
 -- the handler without the possibility of failure. In such a
 -- case, 'passToServer' can be used.
-passToServer :: Delayed m env (a -> b) -> (Request -> a) -> Delayed m env b
+passToServer :: Delayed ctx m env (a -> b) -> (Request -> a) -> Delayed ctx m env b
 passToServer Delayed{..} x =
   Delayed
     { serverD = \ c a b req -> ($ x req) <$> serverD c a b req
@@ -237,8 +253,8 @@ passToServer Delayed{..} x =
 --
 -- This should only be called once per request; otherwise the guarantees about
 -- effect and HTTP error ordering break down.
-runDelayed :: Monad m
-           => Delayed m env a
+runDelayed :: (Monad m, AllApply ctx m)
+           => Delayed ctx m env a
            -> env
            -> Request
            -> m (RouteResult a)
