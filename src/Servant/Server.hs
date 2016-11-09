@@ -88,14 +88,14 @@ import           Snap.Core                         hiding (route)
 --
 
 serveApplication
-  :: forall layout m.(HasServer layout '[], MonadSnap m)
+  :: forall layout m.(HasServer layout '[] m, MonadSnap m)
   => Proxy layout
   -> Server layout m
   -> Application m
-serveApplication p server = toApplication (runRouter (route p (Proxy :: Proxy '[]) (emptyDelayed (Proxy :: Proxy (m :: * -> *)) ((Route server)))))
+serveApplication p server = toApplication (runRouter (route p EmptyContext (emptyDelayed (Proxy :: Proxy (m :: * -> *)) ((Route server)))))
 
 serveSnap
-  :: forall layout m.(HasServer layout '[], MonadSnap m)
+  :: forall layout m.(HasServer layout '[] m, MonadSnap m)
   => Proxy layout
   -> Server layout m
   -> m ()
@@ -103,17 +103,17 @@ serveSnap p server = applicationToSnap $ serveApplication p server
 
 
 serveApplicationWithContext
-  :: forall ctx layout m.(HasServer layout ctx, MonadSnap m, AllApply ctx m)
+  :: forall ctx layout m.(HasServer layout ctx m, MonadSnap m)
   => Proxy layout
-  -> Proxy ctx
-  -> ServerT ctx layout m
+  -> Context ctx
+  -> ServerT layout m
   -> Application m
-serveApplicationWithContext p p' server = toApplication (runRouter (route p p' (emptyDelayed (Proxy :: Proxy (m :: * -> *)) ((Route server)))))
+serveApplicationWithContext p ctx server = toApplication (runRouter (route p ctx (emptyDelayed (Proxy :: Proxy (m :: * -> *)) ((Route server)))))
 
 serveSnapWithContext
-  :: forall ctx layout m.(HasServer layout ctx, MonadSnap m, AllApply ctx m)
+  :: forall ctx layout m.(HasServer layout ctx m, MonadSnap m)
   => Proxy layout
-  -> Proxy ctx
-  -> ServerT ctx layout m
+  -> Context ctx
+  -> ServerT layout m
   -> m ()
-serveSnapWithContext p p' server = applicationToSnap $ serveApplicationWithContext p p' server
+serveSnapWithContext p ctx server = applicationToSnap $ serveApplicationWithContext p ctx server

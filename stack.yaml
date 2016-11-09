@@ -43,7 +43,7 @@ packages:
     commit: a31b7a418894d944cf9ff52262e213f9d5cea437
 - location:
     git: https://github.com/martyall/token-authentication
-    commit: da14b4d43f56c09e8d04ce1688c81125241f76e0
+    commit: 26716a88734c862e278256b1e308dc78ce1f1658
 
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 

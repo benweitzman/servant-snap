@@ -10,7 +10,8 @@
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
-
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Servant.ServerSpec where
 
@@ -26,6 +27,7 @@ import           Data.CaseInsensitive       (mk)
 import           Data.Char                  (toUpper)
 import           Data.Functor               ((<$>), fmap)
 import           Data.Maybe                 (fromMaybe)
+import           Data.Monoid                ((<>))
 import           Data.Proxy                 (Proxy (Proxy))
 import qualified Data.Set                   as Set
 import qualified Data.Text                  as T
@@ -56,7 +58,10 @@ import           Servant.API.Verbs          (Verb, Get, Post, Put, Delete,
                                              Patch)
 import qualified Servant.API.Verbs          as V
 import           Servant.Server             hiding (route)
-import           Servant.Server.Internal    (HasServer)
+import           Servant.Server.Internal    (HasServer, Authenticated, Context(..))
+
+import Snap.Snaplet.Authentication
+import Snap.Snaplet.Types
 
 -------------------------------------------------------------------------------
 -- * test data types
@@ -86,6 +91,7 @@ spec = do
   headerSpec
   rawSpec
   alternativeSpec
+  authenticatedSpec
   responseHeadersSpec
   miscCombinatorSpec
 
@@ -157,7 +163,7 @@ verbSpec = do
           -- HEAD and 214/215 need not return bodies
         unless (status `elem` [214, 215] || method == SC.HEAD) $
           it "returns the person" $ do
-             resp <- runUrl "/" 
+             resp <- runUrl "/"
              resp `shouldDecodeTo` alice
              resp `shouldHaveStatus` status
 
@@ -216,10 +222,10 @@ captureApi2 = Proxy
 captureServer2 :: Server CaptureApi2 AppHandler
 captureServer2 _ = do
   rq <- getRequest
-  writeBS (SC.rqPathInfo rq) 
+  writeBS (SC.rqPathInfo rq)
 
 captureSpec :: Spec
-captureSpec = do -- snap (route (routes captureApi captureServer)) app $  
+captureSpec = do -- snap (route (routes captureApi captureServer)) app $
 
   let ( sInit , _ ) = mkInitAndServer captureApi captureServer
       ( sInit2, _ ) = mkInitAndServer captureApi2 captureServer2
@@ -589,6 +595,47 @@ alternativeSpec = do
         -- liftIO $ statusIs response 404 `shouldBe` True
 -- }}}
 ------------------------------------------------------------------------------
+-- * authenticationSpec {{{
+------------------------------------------------------------------------------
+type AuthenticatedApi =
+       "protected" :> Authenticated Person :> Get '[JSON] Person
+  :<|> "unprotected" :> Get '[JSON] Person
+
+authenticatedApi :: Proxy AuthenticatedApi
+authenticatedApi = Proxy
+
+authenticatedServer :: Server AuthenticatedApi AppHandler
+authenticatedServer = return :<|> return alice
+
+authenticatedSpec :: Spec
+authenticatedSpec = do
+  describe "Servant.API.Authenticated" $ do
+    let settings = defaultJWTSettings theKey
+        authCheck = jwtAuthCheck settings :: AuthCheck AppHandler Person
+        ctx = authCheck :. EmptyContext
+
+    it "doesn't allow unauthenticated user" $ do
+      response <- runReqOnApiWithContext ctx authenticatedApi authenticatedServer SC.GET "/protected" "" [] ""
+      response `shouldHaveStatus` 403
+    it "allows unauthenticated access to unprotected routes" $ do
+      response <- runReqOnApiWithContext ctx authenticatedApi authenticatedServer SC.GET "/unprotected" "" [] ""
+      response `shouldDecodeTo` alice
+    it "allows authenticated users" $ do
+      Right jwt <- makeJWT alice settings Nothing
+      response <- runReqOnApiWithContext
+                    ctx
+                    authenticatedApi
+                    authenticatedServer
+                    SC.GET
+                    "/protected"
+                    ""
+                    [("Authorization", "Bearer " <> BL.toStrict jwt)]
+                    ""
+      response `shouldDecodeTo` alice
+
+
+-- }}}
+------------------------------------------------------------------------------
 -- * responseHeaderSpec {{{
 ------------------------------------------------------------------------------
 type ResponseHeadersApi =
@@ -690,6 +737,9 @@ data Person = Person {
 
 instance ToJSON Person
 instance FromJSON Person
+instance ToJWT Person
+instance FromJWT Person
+
 
 alice :: Person
 alice = Person "Alice" 42
@@ -771,7 +821,7 @@ shouldDecodeTo (Right resp) a = do
               " from body: " ++ B8.unpack bod
     Nothing -> HU.assertFailure $ "Failed to decode respone from body: " ++
                B8.unpack bod ++ "\nResponse: " ++ show resp
-    
+
 shouldHaveHeaders :: Either T.Text Response
                   -> [(B8.ByteString, B8.ByteString)]
                   -> Expectation
@@ -791,12 +841,19 @@ shouldHaveHeaders (Right resp) hs = do
 -- * Assorted Snap helpers
 ------------------------------------------------------------------------------
 
-mkInitAndServer :: HasServer api '[]
+mkInitAndServerWithContext :: HasServer api ctx AppHandler
+                           => Context ctx
+                           -> Proxy (api :: *)
+                           -> Server api AppHandler
+                           -> (SnapletInit App App, AppHandler ())
+mkInitAndServerWithContext ctx api serv = let sRoute = serveSnapWithContext api ctx serv
+                           in  (app' [("", sRoute)], sRoute)
+
+mkInitAndServer :: HasServer api '[] AppHandler
                 => Proxy (api :: *)
                 -> Server api AppHandler
                 -> (SnapletInit App App, AppHandler ())
-mkInitAndServer api serv = let sRoute = serveSnap api serv
-                           in  (app' [("", sRoute)], sRoute)
+mkInitAndServer = mkInitAndServerWithContext EmptyContext
 
 mkRequest :: Method
           -> B8.ByteString
@@ -813,7 +870,22 @@ mkRequest mth pth qs hds bdy = do
   -- req <- State.get -- Useful for debugging
   -- liftIO $ print req
 
-runReqOnApi :: HasServer api '[]
+
+runReqOnApiWithContext :: HasServer api ctx AppHandler
+                       => Context ctx
+                       -> Proxy (api :: *)
+                       -> Server api AppHandler
+                       -> Method
+                       -> B8.ByteString
+                       -> B8.ByteString
+                       -> [Network.HTTP.Types.Header]
+                       -> B8.ByteString
+                       -> IO (Either T.Text Response)
+runReqOnApiWithContext ctx api serv method route qs hds bod =
+  let (sInit, serv') = mkInitAndServerWithContext ctx api serv
+  in SST.runHandler Nothing (mkRequest method route qs hds bod) serv' sInit
+
+runReqOnApi :: HasServer api '[] AppHandler
             => Proxy (api :: *)
             -> Server api AppHandler
             -> Method
@@ -822,11 +894,9 @@ runReqOnApi :: HasServer api '[]
             -> [Network.HTTP.Types.Header]
             -> B8.ByteString
             -> IO (Either T.Text Response)
-runReqOnApi api serv method route qs hds bod =
-  let (sInit, serv') = mkInitAndServer api serv
-  in SST.runHandler Nothing (mkRequest method route qs hds bod) serv' sInit
+runReqOnApi = runReqOnApiWithContext EmptyContext
 
-routes :: HasServer api '[]
+routes :: HasServer api '[] AppHandler
        => Proxy (api :: *)
        -> Server api AppHandler
        -> [(B8.ByteString, AppHandler ())]
