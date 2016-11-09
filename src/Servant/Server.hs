@@ -3,13 +3,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE PolyKinds         #-}
 
 -- | This module lets you implement 'Server's for defined APIs. You'll
 -- most likely just need 'serve'.
 module Servant.Server
   ( -- * Run a snap handler from an API
     serveSnap
-
+  , serveSnapWithContext
   , -- * Handlers for all standard combinators
     HasServer(..)
   , Server
@@ -86,17 +88,32 @@ import           Snap.Core                         hiding (route)
 --
 
 serveApplication
-  :: forall ctx layout m.(HasServer layout ctx, MonadSnap m, AllApply ctx m)
+  :: forall layout m.(HasServer layout '[], MonadSnap m)
   => Proxy layout
-  -> Proxy ctx
-  -> Server ctx layout m
+  -> Server layout m
   -> Application m
-serveApplication p p' server = toApplication (runRouter (route p p' (emptyDelayed (Proxy :: Proxy (m :: * -> *)) ((Route server)))))
+serveApplication p server = toApplication (runRouter (route p (Proxy :: Proxy '[]) (emptyDelayed (Proxy :: Proxy (m :: * -> *)) ((Route server)))))
 
 serveSnap
+  :: forall layout m.(HasServer layout '[], MonadSnap m)
+  => Proxy layout
+  -> Server layout m
+  -> m ()
+serveSnap p server = applicationToSnap $ serveApplication p server
+
+
+serveApplicationWithContext
   :: forall ctx layout m.(HasServer layout ctx, MonadSnap m, AllApply ctx m)
   => Proxy layout
   -> Proxy ctx
-  -> Server ctx layout m
+  -> ServerT ctx layout m
+  -> Application m
+serveApplicationWithContext p p' server = toApplication (runRouter (route p p' (emptyDelayed (Proxy :: Proxy (m :: * -> *)) ((Route server)))))
+
+serveSnapWithContext
+  :: forall ctx layout m.(HasServer layout ctx, MonadSnap m, AllApply ctx m)
+  => Proxy layout
+  -> Proxy ctx
+  -> ServerT ctx layout m
   -> m ()
-serveSnap p p' server = applicationToSnap $ serveApplication p p' server
+serveSnapWithContext p p' server = applicationToSnap $ serveApplicationWithContext p p' server

@@ -10,7 +10,7 @@ module Servant.Utils.StaticFiles (
  ) where
 
 import           Servant.API.Raw                   (Raw)
-import           Servant.Server                    (Server)
+import           Servant.Server                    (ServerT)
 import           Snap.Core
 import qualified Snap.Util.FileServe               as Snap
 
@@ -34,5 +34,5 @@ import qualified Snap.Util.FileServe               as Snap
 -- behind a /\/static\// prefix. In that case, remember to put the 'serveDirectory'
 -- handler in the last position, because /servant/ will try to match the handlers
 -- in order.
-serveDirectory :: MonadSnap m => FilePath -> Server ctx Raw m
+serveDirectory :: MonadSnap m => FilePath -> ServerT ctx Raw m
 serveDirectory fp = liftSnap $ Snap.serveDirectory fp

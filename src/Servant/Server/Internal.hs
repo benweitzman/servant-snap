@@ -77,10 +77,10 @@ class HasServer api ctx where
   route :: (MonadSnap m, AllApply ctx m)
         => Proxy api
         -> Proxy ctx
-        -> Delayed ctx m env (Server ctx api m)
+        -> Delayed ctx m env (ServerT ctx api m)
         -> Router m env
 
-type Server ctx api m = ServerT ctx api m
+type Server api m = ServerT '[] api m
 
 type family Append a b where
     Append '[] b = b

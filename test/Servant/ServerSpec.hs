@@ -791,7 +791,7 @@ shouldHaveHeaders (Right resp) hs = do
 -- * Assorted Snap helpers
 ------------------------------------------------------------------------------
 
-mkInitAndServer :: HasServer api
+mkInitAndServer :: HasServer api '[]
                 => Proxy (api :: *)
                 -> Server api AppHandler
                 -> (SnapletInit App App, AppHandler ())
@@ -813,7 +813,7 @@ mkRequest mth pth qs hds bdy = do
   -- req <- State.get -- Useful for debugging
   -- liftIO $ print req
 
-runReqOnApi :: HasServer api
+runReqOnApi :: HasServer api '[]
             => Proxy (api :: *)
             -> Server api AppHandler
             -> Method
@@ -826,9 +826,8 @@ runReqOnApi api serv method route qs hds bod =
   let (sInit, serv') = mkInitAndServer api serv
   in SST.runHandler Nothing (mkRequest method route qs hds bod) serv' sInit
 
-routes :: HasServer api
+routes :: HasServer api '[]
        => Proxy (api :: *)
        -> Server api AppHandler
        -> [(B8.ByteString, AppHandler ())]
 routes p s = [("", serveSnap p s)]
-
