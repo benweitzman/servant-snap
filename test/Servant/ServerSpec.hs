@@ -60,8 +60,8 @@ import qualified Servant.API.Verbs          as V
 import           Servant.Server             hiding (route)
 import           Servant.Server.Internal    (HasServer, Authenticated, Context(..))
 
-import Snap.Snaplet.Authentication
-import Snap.Snaplet.Types
+--import Snap.Snaplet.Authentication
+--import Snap.Snaplet.Types
 
 -------------------------------------------------------------------------------
 -- * test data types
@@ -91,7 +91,7 @@ spec = do
   headerSpec
   rawSpec
   alternativeSpec
-  authenticatedSpec
+--  authenticatedSpec
   responseHeadersSpec
   miscCombinatorSpec
 
@@ -594,45 +594,45 @@ alternativeSpec = do
         response `shouldHaveStatus` 404
         -- liftIO $ statusIs response 404 `shouldBe` True
 -- }}}
-------------------------------------------------------------------------------
--- * authenticationSpec {{{
-------------------------------------------------------------------------------
-type AuthenticatedApi =
-       "protected" :> Authenticated Person :> Get '[JSON] Person
-  :<|> "unprotected" :> Get '[JSON] Person
-
-authenticatedApi :: Proxy AuthenticatedApi
-authenticatedApi = Proxy
-
-authenticatedServer :: Server AuthenticatedApi AppHandler
-authenticatedServer = return :<|> return alice
-
-authenticatedSpec :: Spec
-authenticatedSpec = do
-  describe "Servant.API.Authenticated" $ do
-    let settings = defaultJWTSettings theKey
-        authCheck = jwtAuthCheck settings :: AuthCheck AppHandler Person
-        ctx = authCheck :. EmptyContext
-
-    it "doesn't allow unauthenticated user" $ do
-      response <- runReqOnApiWithContext ctx authenticatedApi authenticatedServer SC.GET "/protected" "" [] ""
-      response `shouldHaveStatus` 403
-    it "allows unauthenticated access to unprotected routes" $ do
-      response <- runReqOnApiWithContext ctx authenticatedApi authenticatedServer SC.GET "/unprotected" "" [] ""
-      response `shouldDecodeTo` alice
-    it "allows authenticated users" $ do
-      Right jwt <- makeJWT alice settings Nothing
-      response <- runReqOnApiWithContext
-                    ctx
-                    authenticatedApi
-                    authenticatedServer
-                    SC.GET
-                    "/protected"
-                    ""
-                    [("Authorization", "Bearer " <> BL.toStrict jwt)]
-                    ""
-      response `shouldDecodeTo` alice
-
+--------------------------------------------------------------------------------
+---- * authenticationSpec {{{
+--------------------------------------------------------------------------------
+--type AuthenticatedApi =
+--       "protected" :> Authenticated Person :> Get '[JSON] Person
+--  :<|> "unprotected" :> Get '[JSON] Person
+--
+--authenticatedApi :: Proxy AuthenticatedApi
+--authenticatedApi = Proxy
+--
+--authenticatedServer :: Server AuthenticatedApi AppHandler
+--authenticatedServer = return :<|> return alice
+--
+--authenticatedSpec :: Spec
+--authenticatedSpec = do
+--  describe "Servant.API.Authenticated" $ do
+--    let settings = defaultJWTSettings theKey
+--        authCheck = jwtAuthCheck settings :: AuthCheck AppHandler Person
+--        ctx = authCheck :. EmptyContext
+--
+--    it "doesn't allow unauthenticated user" $ do
+--      response <- runReqOnApiWithContext ctx authenticatedApi authenticatedServer SC.GET "/protected" "" [] ""
+--      response `shouldHaveStatus` 403
+--    it "allows unauthenticated access to unprotected routes" $ do
+--      response <- runReqOnApiWithContext ctx authenticatedApi authenticatedServer SC.GET "/unprotected" "" [] ""
+--      response `shouldDecodeTo` alice
+--    it "allows authenticated users" $ do
+--      Right jwt <- makeJWT alice settings Nothing
+--      response <- runReqOnApiWithContext
+--                    ctx
+--                    authenticatedApi
+--                    authenticatedServer
+--                    SC.GET
+--                    "/protected"
+--                    ""
+--                    [("Authorization", "Bearer " <> BL.toStrict jwt)]
+--                    ""
+--      response `shouldDecodeTo` alice
+--
 
 -- }}}
 ------------------------------------------------------------------------------
@@ -737,8 +737,8 @@ data Person = Person {
 
 instance ToJSON Person
 instance FromJSON Person
-instance ToJWT Person
-instance FromJWT Person
+--instance ToJWT Person
+--instance FromJWT Person
 
 
 alice :: Person
