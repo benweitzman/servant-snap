@@ -28,8 +28,8 @@ packages:
   subdirs:
   - digestive-functors
 - location:
-    git: https://github.com/haskell-servant/servant.git
-    commit: 6999b002977fa1a726ea627f716e47c677047713
+    git: https://github.com/vfiles/servant.git
+    commit: b5ae9c04fca62eaaefd6a6951fc743ea0fb01dae
   subdirs:
   - servant
 - location:
@@ -51,6 +51,7 @@ extra-deps:
    - map-syntax-0.2.0.1
    - uuid-aeson-0.1.0.0
    - jose-0.5.0.0
+   - http-api-data-0.3.3
 
 # Override default flag values for local packages and extra-deps
 flags: {}
