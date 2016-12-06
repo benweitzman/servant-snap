@@ -58,9 +58,7 @@ import           Servant.API.Verbs          (Verb, Get, Post, Put, Delete,
                                              Patch)
 import qualified Servant.API.Verbs          as V
 import           Servant.Server             hiding (route)
-import           Servant.Server.Internal    (HasServer, Authenticated, Context(..))
-
-import Snap.Snaplet.Types
+import           Servant.Server.Internal    (HasServer, Context(..))
 
 -------------------------------------------------------------------------------
 -- * test data types
@@ -692,11 +690,8 @@ data Person = Person {
  }
   deriving (Eq, Show, Generic)
 
-instance ToJSON Person
 instance FromJSON Person
-instance ToJWT Person
-instance FromJWT Person
-
+instance ToJSON Person
 
 alice :: Person
 alice = Person "Alice" 42
