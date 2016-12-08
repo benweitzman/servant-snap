@@ -56,6 +56,7 @@ import           Servant.API                 ((:<|>) (..), (:>), Capture,
                                               QueryParam, QueryParams, Raw,
                                               RemoteHost, ReqBody,
                                               ReflectMethod(..), Verb)
+import           Servant.API.ReqQueryParam   (ReqQueryParam)
 import           Servant.API.ContentTypes    (AcceptHeader (..),
                                               AllCTRender (..),
                                               AllCTUnrender (..), AllMime(..), canHandleAcceptH)
@@ -330,6 +331,26 @@ instance (KnownSymbol sym, FromHttpApiData a, HasServer sublayout ctx m)
             Just (Just v) -> parseQueryParamMaybe v -- if present, we try to convert to
                                         -- the right type
     in route (Proxy :: Proxy sublayout) ctx (passToServer subserver param)
+    where paramname = cs $ symbolVal (Proxy :: Proxy sym)
+
+instance (KnownSymbol sym, FromHttpApiData a, HasServer sublayout ctx m)
+      => HasServer (ReqQueryParam sym a :> sublayout) ctx m where
+
+  type ServerT (ReqQueryParam sym a :> sublayout) m =
+    a -> ServerT sublayout m
+
+  route Proxy ctx subserver =
+    let querytext r = parseQueryText $ rqQueryString r
+        param r =
+          let v :: Maybe a = case lookup paramname (querytext r) of
+                Nothing       -> Nothing -- param absent from the query string
+                Just Nothing  -> Nothing -- param present with no value -> Nothing
+                Just (Just v) -> parseQueryParamMaybe v -- if present, we try to convert to
+                                        -- the right type
+          in case v of
+            Just val -> Route val
+            Nothing -> FailFatal err400
+    in route (Proxy :: Proxy sublayout) ctx (passToServerFail subserver param)
     where paramname = cs $ symbolVal (Proxy :: Proxy sym)
 
 

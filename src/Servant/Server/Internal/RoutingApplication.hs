@@ -50,6 +50,15 @@ data RouteResult a =
   | Route !a
   deriving (Eq, Show, Read, Functor)
 
+instance Applicative RouteResult where
+  pure = Route
+
+  Route f <*> Route a = Route (f a)
+  Route _ <*> Fail x = Fail x
+  Route _ <*> FailFatal x = FailFatal x
+  Fail x <*> _ = Fail x
+  FailFatal x <*> _ = FailFatal x
+
 
 toApplication :: forall m. MonadSnap m => RoutingApplication m -> Application m
 toApplication ra request respond = do
@@ -241,8 +250,15 @@ passToServer Delayed{..} x =
     , ..
     } -- Note [Existential Record Update]
 
+passToServerFail :: Delayed m env (a -> b) -> (Request -> RouteResult a) -> Delayed m env b
+passToServerFail Delayed{..} x =
+  Delayed
+    { serverD = \ c a b req -> serverD c a b req <*> x req
+    , ..
+    }
 
--- | Run a delayed server. Performs all scheduled operations
+
+-- | run a delayed server. Performs all scheduled operations
 -- in order, and passes the results from the capture and body
 -- blocks on to the actual handler.
 --

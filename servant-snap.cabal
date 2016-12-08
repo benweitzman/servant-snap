@@ -33,6 +33,7 @@ source-repository head
 library
   exposed-modules:
     Servant
+    Servant.API.ReqQueryParam
     Servant.Server
     Servant.Server.Internal
     Servant.Server.Internal.PathInfo

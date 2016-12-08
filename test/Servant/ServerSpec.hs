@@ -54,6 +54,7 @@ import           Servant.API                ((:<|>) (..), (:>),
                                              PlainText, QueryFlag, QueryParam,
                                              QueryParams, Raw, RemoteHost,
                                              ReqBody)
+import           Servant.API.ReqQueryParam  (ReqQueryParam)
 import           Servant.API.Verbs          (Verb, Get, Post, Put, Delete,
                                              Patch)
 import qualified Servant.API.Verbs          as V
@@ -310,12 +311,13 @@ captureAllSpec = do
 type QueryParamApi = QueryParam "name" String :> Get '[JSON] Person
                 :<|> "a" :> QueryParams "names" String :> Get '[JSON] Person
                 :<|> "b" :> QueryFlag "capitalize" :> Get '[JSON] Person
+                :<|> "c" :> ReqQueryParam "name" String :> Get '[JSON] Person
 
 queryParamApi :: Proxy QueryParamApi
 queryParamApi = Proxy
 
 qpServer :: Server QueryParamApi AppHandler
-qpServer = queryParamServer :<|> qpNames :<|> qpCapitalize
+qpServer = queryParamServer :<|> qpNames :<|> qpCapitalize :<|> reqQp
 
   where qpNames (_:name2:_) = return alice { name = name2 }
         qpNames _           = return alice
@@ -326,6 +328,8 @@ qpServer = queryParamServer :<|> qpNames :<|> qpCapitalize
         queryParamServer (Just name_) = return alice{name = name_}
         queryParamServer Nothing = return alice
 
+        reqQp name_ = return alice{name = name_}
+
 queryParamSpec :: Spec
 queryParamSpec = do
   describe "Servant.API.QueryParam" $ do
@@ -335,6 +339,10 @@ queryParamSpec = do
 
       it "allows retrieving simple GET parameters" $
         runTest "" "?name=bob" >>= (`shouldDecodeTo` alice {name="bob"})
+
+      it "requires a param" $ do
+        runTest "c" "?name=bob" >>= (`shouldDecodeTo` alice {name="bob"})
+        runTest "c" "" >>= (`shouldHaveStatus` 400)
 
 {-
 (flip runSession) (serve queryParamApi qpServer) $ do
