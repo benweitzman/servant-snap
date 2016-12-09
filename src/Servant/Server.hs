@@ -15,6 +15,7 @@ module Servant.Server
   , -- * Handlers for all standard combinators
     HasServer(..)
   , Server
+  , Context(..)
 
     -- ** Basic functions and datatypes
 
